@@ -3,20 +3,19 @@ const express = require('express');
 const mongoose = require('mongoose');
 // eslint-disable-next-line import/no-extraneous-dependencies
 const bodyParser = require('body-parser');
-const users = require('./routes/users');
-const cards = require('./routes/cards');
+
+const userRouter = require('./routes/users');
+const cardRouter = require('./routes/cards');
 
 const { PORT = 3000, BASE_PATH = 'localhost' } = process.env;
+
 const app = express();
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-mongoose.connect('mongodb://localhost:27017/mestodb ', {
-  // useNewUrlParser: true,
-  // useCreateIndex: true,
-  // useFindAndModify: false,
-})
+// подключаемся к серверу mongo
+mongoose.connect('mongodb://localhost:27017/mestodb')
   .then(() => console.log('База данных подключена.'))
   .catch((err) => console.log('DB error', err));
 
@@ -33,8 +32,8 @@ app.use((req, res, next) => {
   }
 });
 
-app.use('/users', users);
-app.use('/cards', cards);
+app.use('/users', userRouter);
+app.use('/cards', cardRouter);
 app.use('*', (req, res) => {
   res.status(404).send({ message: 'Запрашиваемая страница не найдена' });
 });

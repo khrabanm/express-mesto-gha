@@ -1,14 +1,38 @@
 const Card = require('../models/card');
 
-module.exports.getCards = (req, res, next) => {
+// Удаление карточки
+const deleteCard = (req, res) => {
+  // eslint-disable-next-line no-underscore-dangle
+  Card.findByIdAndRemove(req.params.cardId)
+    // eslint-disable-next-line consistent-return
+    .then((card) => {
+      if (card) {
+        res.status(200).send({ data: card });
+      } else {
+        return res.status(404).send({ message: 'Карточка не найдена', card });
+      }
+    })
+    // eslint-disable-next-line consistent-return
+    .catch((err) => {
+      if (err.name === 'CastError') {
+        res.status(400).send({ message: 'Некорректный id карточки', err });
+      } else {
+        return res.status(500).send({ message: 'Что-то пошло не так', err });
+      }
+    });
+};
+
+// Получение карточек
+const getCards = (req, res, next) => {
   // eslint-disable-next-line no-undef
   Card.find()
     .then((cardList) => res.send({ data: cardList }))
     .catch(next);
 };
 
+// Создание карточки
 // eslint-disable-next-line consistent-return
-module.exports.createCard = (req, res) => {
+const createCard = (req, res) => {
   const { name, link } = req.body;
   // eslint-disable-next-line no-underscore-dangle
   const owner = req.user._id;
@@ -25,29 +49,8 @@ module.exports.createCard = (req, res) => {
       return res.status(500).json({ message: 'Не удалось создать карточку', err });
     });
 };
-
-module.exports.removeCard = (req, res) => {
-  // eslint-disable-next-line no-underscore-dangle
-  Card.findByIdAndRemove(req.params.cardId)
-    // eslint-disable-next-line consistent-return
-    .then((card) => {
-      if (card) {
-        res.status(200).send({ data: card });
-      } else {
-        return res.status(404).send({ message: 'Карточка не найдена', card });
-      }
-    })
-    // eslint-disable-next-line consistent-return
-    .catch((err) => {
-      if (err.message === 'CastError') {
-        res.status(500).send({ message: 'Что-то пошло не так', err });
-      } else {
-        return res.status(400).send({ message: 'Некорректный id карточки', err });
-      }
-    });
-};
-
-module.exports.likeCard = (req, res) => {
+// Лайк карточки
+const likeCard = (req, res) => {
   Card.findByIdAndUpdate(
     req.params.cardId,
     // eslint-disable-next-line no-underscore-dangle
@@ -68,7 +71,8 @@ module.exports.likeCard = (req, res) => {
   });
 };
 
-module.exports.dislikeCard = (req, res) => {
+// Дизлайк карточки
+const dislikeCard = (req, res) => {
   Card.findByIdAndUpdate(
     req.params.cardId,
     // eslint-disable-next-line no-underscore-dangle
@@ -85,10 +89,18 @@ module.exports.dislikeCard = (req, res) => {
     })
     // eslint-disable-next-line consistent-return
     .catch((err) => {
-      if (err.message === 'CastError') {
-        res.status(500).send({ message: 'Что-то пошло не так', err });
+      if (err.name === 'CastError') {
+        res.status(400).send({ message: 'Некорректный id карточки', err });
       } else {
-        return res.status(400).send({ message: 'Некорректный id карточки', err });
+        return res.status(500).send({ message: 'Что-то пошло не так', err });
       }
     });
+};
+
+module.exports = {
+  getCards,
+  createCard,
+  deleteCard,
+  likeCard,
+  dislikeCard,
 };

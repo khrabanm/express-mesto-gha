@@ -1,12 +1,14 @@
 const User = require('../models/user');
 
-module.exports.getUsers = (req, res, next) => {
+// Получение списка пользователей
+const getUserList = (req, res, next) => {
   User.find({})
     .then((userList) => res.status(200).send({ data: userList }))
     .catch(next);
 };
 
-module.exports.getUser = (req, res) => {
+// Получение пользователя по ID
+const getUserId = (req, res) => {
   const { userId } = req.params;
   User.findById(userId)
     // eslint-disable-next-line consistent-return
@@ -25,8 +27,9 @@ module.exports.getUser = (req, res) => {
     });
 };
 
+// Создание пользователя (Регистрация)
 // eslint-disable-next-line consistent-return
-module.exports.createUser = (req, res) => {
+const registerUser = (req, res) => {
   const { name, about, avatar } = req.body;
 
   if (!name || !about || !avatar) {
@@ -47,7 +50,26 @@ module.exports.createUser = (req, res) => {
     });
 };
 
-module.exports.editProfile = (req, res) => {
+// Обновление аватара пользователя
+const updateUserAvatar = (req, res) => {
+  const { avatar } = req.body;
+  // eslint-disable-next-line no-underscore-dangle
+  User.findByIdAndUpdate(req.user._id, { avatar }, {
+    new: true,
+    runValidators: true,
+  })
+    .then((updatedAvatar) => res.status(200).send({ data: updatedAvatar }))
+    .catch((err) => {
+      if (err.name === 'ValidationError') {
+        res.status(400).send({ message: 'Переданы некорректные данные при обновлении аватара' });
+      } else {
+        res.status(500).send({ message: err.message });
+      }
+    });
+};
+
+// Обновление профиля пользователя
+const updateUserData = (req, res) => {
   const { name, about } = req.body;
   // eslint-disable-next-line no-underscore-dangle
   User.findByIdAndUpdate(req.user._id, { name, about }, {
@@ -64,19 +86,10 @@ module.exports.editProfile = (req, res) => {
     });
 };
 
-module.exports.editAvatar = (req, res) => {
-  const { avatar } = req.body;
-  // eslint-disable-next-line no-underscore-dangle
-  User.findByIdAndUpdate(req.user._id, { avatar }, {
-    new: true,
-    runValidators: true,
-  })
-    .then((updatedAvatar) => res.status(200).send({ data: updatedAvatar }))
-    .catch((err) => {
-      if (err.name === 'ValidationError') {
-        res.status(400).send({ message: 'Переданы некорректные данные при обновлении аватара' });
-      } else {
-        res.status(500).send({ message: err.message });
-      }
-    });
+module.exports = {
+  getUserList,
+  getUserId,
+  registerUser,
+  updateUserAvatar,
+  updateUserData,
 };
