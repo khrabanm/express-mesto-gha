@@ -1,43 +1,25 @@
-/* eslint-disable no-console */
 const express = require('express');
 const mongoose = require('mongoose');
-// eslint-disable-next-line import/no-extraneous-dependencies
 const bodyParser = require('body-parser');
+const cookieParser = require('cookie-parser');
+const { errors } = require('celebrate');
+const errorHandler = require('./middlewres/error');
+const router = require('./routes');
 
-const userRouter = require('./routes/users');
-const cardRouter = require('./routes/cards');
-
-const { PORT = 3000, BASE_PATH = 'localhost' } = process.env;
-
+const { PORT = 3000 } = process.env;
 const app = express();
 
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(cookieParser());
 
-// подключаемся к серверу mongo
-mongoose.connect('mongodb://localhost:27017/mestodb')
-  .then(() => console.log('База данных подключена.'))
-  .catch((err) => console.log('DB error', err));
+app.use(router);
 
-app.use((req, res, next) => {
-  try {
-    const loggedInUserId = '64de2e00e8b9dd90196255b6';
-    req.user = {
-      _id: loggedInUserId,
-    };
-    next();
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('Internal Server Error');
-  }
-});
+app.use(errors());
+app.use(errorHandler);
 
-app.use('/users', userRouter);
-app.use('/cards', cardRouter);
-app.use('*', (req, res) => {
-  res.status(404).send({ message: 'Запрашиваемая страница не найдена' });
-});
+mongoose.connect('mongodb://localhost:27017/testdb')
+  .then(() => console.log('Connected to the data base'));
 
 app.listen(PORT, () => {
-  console.log(`Сервер подключен — http://${BASE_PATH}:${PORT}`);
+  console.log(`App listening on port ${PORT}`);
 });

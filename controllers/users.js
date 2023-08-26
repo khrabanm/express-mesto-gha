@@ -1,95 +1,137 @@
+const { ValidationError, CastError } = require('mongoose').Error;
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+
+const {
+  JWT_SECRET, ERROR_CODE_UNIQUE, STATUS_OK, CREATED,
+} = require('../utils/constants');
+const BadRequest = require('../utils/errors/BadRequest');
+const NotFound = require('../utils/errors/NotFound');
+const NotUnique = require('../utils/errors/NotUnique');
+const ErrorAccess = require('../utils/errors/ErrorAccess');
+
 const User = require('../models/user');
 
-// Получение списка пользователей
-const getUserList = (req, res, next) => {
+const getUsers = (req, res, next) => {
   User.find({})
-    .then((userList) => res.status(200).send({ data: userList }))
+    .then((users) => res.send(users))
     .catch(next);
 };
 
-// Получение пользователя по ID
-const getUserId = (req, res) => {
+const findById = (req, res, next, id) => {
+  User.findById(id)
+    .orFail(new NotFound(`Пользователь по указанному id: ${id} не найден`))
+    .then((user) => res.send(user))
+    .catch(next);
+};
+
+const getUser = (req, res, next) => {
   const { userId } = req.params;
-  User.findById(userId)
-    // eslint-disable-next-line consistent-return
-    .then((selectedUser) => {
-      if (!selectedUser) {
-        return res.status(404).send({ message: 'Пользователь не найден' });
-      }
-      res.status(200).send({ data: selectedUser });
+  findById(req, res, next, userId);
+};
+
+const getCurrentUser = (req, res, next) => {
+  const { _id } = req.user;
+  findById(req, res, next, _id);
+};
+
+const createUser = (req, res, next) => {
+  const {
+    name, about, avatar, email, password,
+  } = req.body;
+  return bcrypt.hash(String(password), 10)
+    .then((hash) => User.create({
+      name, about, avatar, email, password: hash,
+    }))
+    .then(() => {
+      res.status(CREATED).send({
+        name,
+        about,
+        avatar,
+        email,
+      });
     })
-    // eslint-disable-next-line consistent-return
     .catch((err) => {
-      if (err.name === 'CastError') {
-        return res.status(400).send({ message: 'Неверный ID' });
-      }
-      return res.status(500).send({ message: 'Ошибка на сервере' });
-    });
-};
-
-// Создание пользователя (Регистрация)
-// eslint-disable-next-line consistent-return
-const registerUser = (req, res) => {
-  const { name, about, avatar } = req.body;
-
-  if (!name || !about || !avatar) {
-    return res.status(400).send({
-      message: 'Не заполнено обязательное поле name, about и/или avatar',
-    });
-  }
-
-  User.create({ name, about, avatar })
-    .then((user) => res.status(201).send({ data: user }))
-    .catch((err) => {
-      if (err.name === 'ValidationError') {
-        return res.status(400).send({
-          message: 'Переданы некорректные данные в метод создания пользователя',
-        });
-      }
-      return res.status(500).json({ message: 'Не удалось создать пользователя', err });
-    });
-};
-
-// Обновление аватара пользователя
-const updateUserAvatar = (req, res) => {
-  const { avatar } = req.body;
-  // eslint-disable-next-line no-underscore-dangle
-  User.findByIdAndUpdate(req.user._id, { avatar }, {
-    new: true,
-    runValidators: true,
-  })
-    .then((updatedAvatar) => res.status(200).send({ data: updatedAvatar }))
-    .catch((err) => {
-      if (err.name === 'ValidationError') {
-        res.status(400).send({ message: 'Переданы некорректные данные при обновлении аватара' });
+      if (err.code === ERROR_CODE_UNIQUE) {
+        next(new NotUnique('Пользователь с такой почтой уже зарегистрирован'));
+      } else if (err instanceof ValidationError) {
+        next(new BadRequest('Переданы некорректные данные при создании пользователя'));
       } else {
-        res.status(500).send({ message: err.message });
+        next(err);
       }
     });
 };
 
-// Обновление профиля пользователя
-const updateUserData = (req, res) => {
+const updateProfileInfo = (req, res, next) => {
   const { name, about } = req.body;
-  // eslint-disable-next-line no-underscore-dangle
-  User.findByIdAndUpdate(req.user._id, { name, about }, {
-    new: true,
-    runValidators: true,
-  })
-    .then((updatedData) => res.status(200).send({ data: updatedData }))
+  const { _id } = req.user;
+
+  User.findByIdAndUpdate({ _id }, { name, about }, { new: true, runValidators: true })
+    .then((user) => {
+      if (!user) {
+        next(new NotFound('Пользователь по указанному id не найден'));
+      }
+      res.status(STATUS_OK).send(user);
+    })
     .catch((err) => {
-      if (err.name === 'ValidationError') {
-        res.status(400).send({ message: 'Переданы некорректные данные при обновлении профиля' });
+      if (err instanceof ValidationError || err instanceof CastError) {
+        next(new BadRequest('Данные введены некорректно'));
       } else {
-        res.status(500).send({ message: err.message });
+        next(err);
       }
     });
+};
+
+const updateAvatar = (req, res, next) => {
+  const { avatar } = req.body;
+  const { _id } = req.user;
+
+  User.findByIdAndUpdate({ _id }, { avatar }, { new: true, runValidators: true })
+    .then((user) => {
+      if (!user) {
+        throw new NotFound('Пользователь по указанному id не найден');
+      }
+      res.status(STATUS_OK).send(user);
+    })
+    .catch((err) => {
+      if (err instanceof ValidationError || err instanceof CastError) {
+        next(new BadRequest('Данные введены некорректно'));
+      } else {
+        next(err);
+      }
+    });
+};
+
+const login = (req, res, next) => {
+  const { email, password } = req.body;
+  User.findOne({ email })
+    .select('+password')
+    .orFail(new ErrorAccess('Пользователь не найден'))
+    .then((user) => {
+      bcrypt.compare(String(password), user.password)
+        .then((isValidUser) => {
+          if (isValidUser) {
+            const newToken = jwt.sign({ _id: user._id }, JWT_SECRET);
+            res.cookie('token', newToken, {
+              maxAge: 36000 * 24 * 7,
+              httpOnly: true,
+              sameSite: true,
+            }).send({ newToken });
+          } else {
+            next(new ErrorAccess('Неверный логин или пароль'));
+          }
+        });
+    })
+    .catch(next);
 };
 
 module.exports = {
-  getUserList,
-  getUserId,
-  registerUser,
-  updateUserAvatar,
-  updateUserData,
+  createUser,
+  getUsers,
+  getUser,
+  updateAvatar,
+  updateProfileInfo,
+  login,
+  getCurrentUser,
+  findById,
 };
